@@ -23,8 +23,8 @@
 		/**
 		 * The datasource where this model is stored.
 		 */
-		protected $_dataSource = 'default';
-		protected static $_dataSources = array();
+		protected $_connectionName = 'default';
+		protected static $_connectionNames = array();
 		
 		/**
 		 * The name of the database table associated with this model. May be overridden
@@ -112,7 +112,7 @@
 		 */
 		public function __construct($properties = array()) {
 			$this->_modelName = static::modelName();
-			$this->_dataSource = static::dataSource();
+			$this->_connectionName = static::connectionName();
 			$this->_tableName = static::tableName();
 			$this->_primaryKeyField = static::primaryKeyField();
 			
@@ -487,13 +487,13 @@
 			return $this->_stored[$this->_primaryKeyField];
 		}
 		
-		public static function dataSource() {
+		public static function connectionName() {
 			$c = get_called_class();
-			if (!isset(self::$_dataSources[$c])) {
+			if (!isset(self::$_connectionNames[$c])) {
 				$v = get_class_vars($c);
-				self::$_dataSources[$c] = $v['_dataSource'];
+				self::$_connectionNames[$c] = $v['_connectionName'];
 			}
-			return self::$_dataSources[$c];
+			return self::$_connectionNames[$c];
 		}
 		
 		public static function modelName() {

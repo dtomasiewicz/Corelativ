@@ -20,7 +20,7 @@
 					return $this->_Object->$name;
 			}
 		}
-		
+		/*
 		public function find($params = array()) {
 			$params = $this->_normalizeParams($params);
 			$params->limit = 1;
@@ -30,8 +30,17 @@
 			} else {
 				return false;
 			}
-		}
+		}*/
 		
+		public function find() {
+			$query = new ModelQuery(ModelQuery::SELECT, $this->_Object);
+			$query->fields('*')->from($this->_Object->tableName());
+			if(count($args = func_get_args())) {
+				call_user_func_array(array($query, 'where'), $args);
+			}
+			return $query;
+		}
+		/*
 		public function findAll($params = array()) {
 			$params = $this->_normalizeParams($params);
 			
@@ -56,7 +65,7 @@
 					throw new Exception\Model('Error in find operation: '.Data::source($this->_Object->dataSource())->error());
 				}
 			}
-		}
+		}*/
 		
 		public function delete($params = array()) {
 			$params = $this->_normalizeParams($params, 'delete');

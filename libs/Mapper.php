@@ -15,7 +15,7 @@
 		
 		public static function factory($modelName) {
 			if (!isset(self::$_factories[$modelName])) {
-				if (class_exists('\\Corelativ\\Model\\'.$modelName)) {
+				if (class_exists('Corelativ\\Model\\'.$modelName)) {
 					self::$_factories[$modelName] = new Factory(array('model' => $modelName));
 				} else {
 					self::$_factories[$modelName] = false;

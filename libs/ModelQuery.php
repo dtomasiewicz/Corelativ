@@ -1,33 +1,35 @@
 <?php
 	namespace Corelativ;
-	use \DataPane;
+	use \DataPane\Data,
+	    \DataPane\Query;
 	
-	class ModelQuery extends DataPane\Query {
-		protected $_page;
+	class ModelQuery extends Query {
+		protected $_Object;
 		
-		public function __construct($type, $tables, $params = array()) {
-			parent::__construct($type, $tables, $params);
-			
-			$this->page = isset($params['page']) ? $params['page'] : null;
+		public function __construct($type, $object) {
+			parent::__construct($type);
+			$this->_Object = $object;
 		}
 		
-		public function paginated() {
-			return (bool) (!is_null($this->_page) && !is_null($this->limit));
+		public function fetchAll($params = array()) {
+			$statement = Data::connection($this->_Object->connectionName())->prepare($this);
+			$statement->execute($params);
+			$class = get_class($this->_Object);
+			$set = new ModelSet(get_class($this->_Object));
+			foreach($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+				$set->add(new $class($row));
+			}
+			return $set;
 		}
 		
-		/**
-		 * If a page number is defined, increase the offset by the appropriate amount.
-		 * Default offset is 0.
-		 * @param string $name Name of the property
-		 * @return string If name is offset, will return the adjusted offset. Otherwise, see parent.
-		 */
-		public function __get($name) {
-			if ($name == 'offset' && $this->paginated()) {
-				return $this->_offset + ($this->_page-1)*$this->limit;
-			} elseif ($name == 'page' && $this->paginated()) {
-				return $this->_page;
+		public function fetch($params = array()) {
+			$statement = Data::connection($this->_Object->connectionName())->prepare($this);
+			$statement->execute($params);
+			$class = get_class($this->_Object);
+			if($row = $statement->fetch(\PDO::FETCH_ASSOC)) {
+				return new $class($row);
 			} else {
-				return parent::__get($name);
+				return false;
 			}
 		}
 	}

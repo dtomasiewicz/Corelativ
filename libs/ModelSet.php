@@ -15,19 +15,9 @@
 		public $page;
 		public $totalRecords;
 		public $totalPages;
-		protected $_modelType;
-		
-		public function __construct($type, $items = array()) {
-			$this->_modelType = $type;
-			parent::__construct('\\Corelativ\\Model\\'.$type, $items);
-		}
 		
 		public function indexByPrimaryKey() {
 			$class = $this->type();
 			parent::indexBy($class::primaryKeyField());
-		}
-		
-		public function modelType() {
-			return $this->_modelType;
 		}
 	}

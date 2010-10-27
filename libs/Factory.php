@@ -34,18 +34,17 @@
 			}
 		}
 		
-		public function find() {
-			$query = new ModelQuery(ModelQuery::SELECT, $this->_Object);
+		public function find($where = null) {
+			$query = new ModelQuery(ModelQuery::SELECT, $this->modelName());
 			$query->fields($this->_Object->tableName().'.*')->from($this->_Object->tableName());
-			if(count($args = func_get_args())) {
-				call_user_func_array(array($query, 'where'), $args);
+			if($where !== null) {
+				$query->where($where);
 			}
 			return $query;
 		}
 		
-		public function findOne() {
-			$q = call_user_func_array(array($this, 'find'), func_get_args());
-			return $q->limit(1);
+		public function findOne($where = null) {
+			return $this->find($where)->limit(1);
 		}
 		
 		public function fetch() {
@@ -56,13 +55,17 @@
 			return $this->find()->fetchAll();
 		}
 		
-		public function delete() {
-			$query = new ModelQuery(ModelQuery::DELETE, $this->_Object);
-			$query->from($this->_Object->tableName());
-			if(count($args = func_get_args())) {
-				call_user_func_array(array($query, 'where'), $args);
+		public function delete($where = null) {
+			$query = new ModelQuery(ModelQuery::DELETE, $this->modelName());
+			$query->from($this->tableName());
+			if($where !== null) {
+				$query->where($where);
 			}
 			return $query;
+		}
+		
+		public function modelName() {
+			return get_class($this->_Object);
 		}
 		
 		public function tableName() {

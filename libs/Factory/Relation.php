@@ -1,49 +1,59 @@
 <?php
 	namespace Corelativ\Factory;
-	use Corelativ\Factory;
+	use \Corelativ\ModelQuery;
 	
-	/**
-	 * implementation notes:
-	 *  through needs to be specified outside of constructor
-	 *  type needs to be determined outside of constructor
-	 */
-	abstract class Relation extends Factory {
-		protected $_subjectAlias;
-		protected $_subjectKeyField;
-		protected $_objectAlias;
-		protected $_objectKeyField;
+	abstract class Relation extends \Corelativ\Factory {
 		protected $_Subject;
+		protected $_foreignKeyField;
+		protected $_alias;
 		
-		public function __construct($config) {
+		public function __construct($config, $subject) {
 			parent::__construct($config);
-			$this->_Subject = $config['subject'];
-			
-			$this->_subjectAlias = isset($config['subjectAlias'])
-				? $config['subjectAlias']
-				: $this->_Subject->modelName();
-			
-			$this->_objectAlias = isset($config['objectAlias'])
-				? $config['objectAlias']
-				: $this->_Object->modelName();
-				
-			$this->_subjectKeyField = isset($config['subjectKeyField'])
-				? $config['subjectKeyField']
-				: lcfirst($this->_subjectAlias).ucfirst($this->_Subject->primaryKeyField());
-			
-			$this->_objectKeyField = isset($config['objectKeyField'])
-				? $config['objectKeyField']
-				: lcfirst($this->_objectAlias).ucfirst($this->_Object->primaryKeyField());
+			$this->_Subject = $subject;
+			$this->_alias = isset($config['alias'])
+				? $config['alias']
+				: $config['model'];
 		}
 		
-		public function findAll($params = array()) {
-			$params = $this->_normalizeParams($params);
-			$condition = $this->_uniqueCondition();
-			$condition->add($params->where);
-			$params->where = $condition;
-			return parent::findAll($params);
+		public function alias() {
+			return $this->_alias;
 		}
 		
-		abstract protected function _uniqueCondition();
-		abstract public function set($related);
-		abstract public function save();
+		public function find() {
+			$query = new ModelQuery(ModelQuery::SELECT, $this->_Object);
+			$query->fields($this->tableName().'.*')
+				->from($this->getFrom());
+			
+			if($filters = $this->getFilters()) {
+				$query->where($filters);
+			}
+			
+			if(count($args = func_get_args())) {
+				call_user_func_array(array($query, 'where'), $args);
+			}
+			
+			return $query;
+		}
+		
+		public function delete() {
+			$query = new ModelQuery(ModelQuery::DELETE, $this->_Object);
+			$query->from($this->getFrom());
+			
+			if($filters = $this->getFilters()) {
+				$query->where($filters); 
+			}
+			
+			if(count($args = func_get_args())) {
+				call_user_func_array(array($query, 'where'), $args);
+			}
+			
+			return $query;
+		}
+		
+		public function foreignKeyField() {
+			return $this->_foreignKeyField;
+		}
+		
+		abstract public function getFilters();
+		abstract public function getFrom();
 	}

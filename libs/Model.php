@@ -4,8 +4,8 @@
 		\Frawst\Library\Validator,
 		\Frawst\Library\JSONEncodable,
 		\Frawst\Exception,
-		\DataPane,
-		\DataPane\Data;
+		\DataPane\Data,
+		\DataPane\Query;
 	
 	abstract class Model implements \Serializable, JSONEncodable {
 		const INDEX_PRIMARY = 'PRIMARY';
@@ -16,56 +16,46 @@
 		const FIELD_VARCHAR = 'VARCHAR';
 		const FIELD_TEXT = 'TEXT';
 		const FIELD_BOOL = 'BOOL';
+		const FIELD_ENUM = 'ENUM';
 		
 		protected static $_nextUniqueId = 1;
 		protected $_uniqueId;
 		
 		/**
-		 * The datasource where this model is stored.
+		 * @var string The connection used for this model.
 		 */
-		protected $_connectionName = 'default';
-		protected static $_connectionNames = array();
+		protected static $_connectionName = null;
 		
 		/**
 		 * The name of the database table associated with this model. May be overridden
 		 * in subclasses. Set in constructor.
 		 * @var string
 		 */
-		protected $_tableName;
-		protected static $_tableNames = array();
-		
-		/**
-		 * The name of the model (the base part of the class name). Set
-		 * in constructor.
-		 * @var string
-		 */
-		protected $_modelName;
-		protected static $_modelNames = array();
+		protected static $_tableName = null;
 		
 		/**
 		 * The field to be used as the primary key. May be overridden in subclasses.
 		 * @var string
 		 */
-		protected $_primaryKeyField;
-		protected static $_primaryKeyFields = array();
+		protected static $_primaryKeyField = null;
 		
 		/**
 		 * Array of properties and configurations
 		 * @var array
 		 */
-		protected $_properties;
+		protected static $_properties = array();
 		
 		/**
 		 * An associative array describing the relations between this model and other models.
 		 * @var array
 		 */
-		protected $_related = array();
+		protected static $_related = array();
 		
 		/**
 		 * Associative array of validation instructions for this model.
 		 * @var array
 		 */
-		protected $_validate = array();
+		protected static $_validate = array();
 		
 		/**
 		 * Stores the saved properties of this model. Set in constructor.
@@ -80,7 +70,7 @@
 		protected $_changes;
 		
 		/**
-		 * Whether or not this model has been saved to the datasource since the
+		 * Whether or not this model has been saved to the data source since the
 		 * most recent change. Set in constructor.
 		 * @var boolean
 		 */
@@ -111,11 +101,6 @@
 		 * of the model.
 		 */
 		public function __construct($properties = array()) {
-			$this->_modelName = static::modelName();
-			$this->_connectionName = static::connectionName();
-			$this->_tableName = static::tableName();
-			$this->_primaryKeyField = static::primaryKeyField();
-			
 			if ($properties instanceof Factory) {
 				// empty model for use by a factory
 				$this->_Factory = $properties;
@@ -124,34 +109,33 @@
 				$this->_stored = array();
 				$this->_changes = array();
 				
-				$this->_saved = isset($properties[$this->_primaryKeyField]);
+				$this->_saved = isset($properties[$this->primaryKeyField()]);
 				
-				foreach ($this->_properties as $prop => $cfg) {
+				foreach (static::$_properties as $prop => $cfg) {
 					if ($this->_saved) {
 						$this->_stored[$prop] = isset($properties[$prop])
 							? $properties[$prop]
 							: $this->defaultValue($prop);
 					} else {
-						$this->_changes[$prop] = $this->defaultValue($prop);
+						$this->_changes[$prop] = isset($properties[$prop])
+							? $properties[$prop]
+							: $this->defaultValue($prop);
+						$this->_stored[$prop] = null;
 					}
-				}
-				
-				if(!$this->_saved) {
-					$this->create($properties);
 				}
 			}
 		}
 		
-		public function create($data = array()) {
-			$this->set($data);
-		}
-		
 		public function __get($property) {
-			switch($property) {
-				case 'Factory':
-					return $this->_Factory;
-				default:
-					return $this->get($property);
+			if($this->propertyExists($property)) {
+				return $this->get($property);
+			} elseif($rel = $this->relate($property)) {
+				return $rel;
+			} elseif($property == 'Factory') {
+				return $this->_Factory;
+			} else {
+				//@todo exception
+				exit('invalid model property: '.$property);
 			}
 		}
 		
@@ -179,14 +163,16 @@
 		 * @param string $property The name of the property/relation
 		 * @return mixed The value of the property, or a relation object, if exists.
 		 */
-		public function get($property = null) {
+		public function get($property = null, $storedValue = false) {
 			if (is_null($property)) {
 				return $this->_changes + $this->_stored;
 			} elseif ($this->propertyExists($property)) {
-				return isset($this->_changes[$property]) ? $this->_changes[$property] : $this->_stored[$property];
+				return !$storedValue && isset($this->_changes[$property])
+					? $this->_changes[$property]
+					: $this->_stored[$property];
 			} elseif ($rel = $this->relate($property)) {
 				if ($rel instanceof Factory\Singular) {
-					return $rel->find();
+					return $rel->fetch();
 				} else {
 					return $rel;
 				}
@@ -275,10 +261,6 @@
 		 * Saves models.
 		 */
 		public function save($relationships = true) {
-			if (!$this->beforeValidate()) {
-				return false;
-			}
-			
 			if ($this->validate($relationships) !== true) {
 				return false;
 			}
@@ -287,29 +269,35 @@
 				return false;
 			}
 			
+			$props = $this->get();
+			unset($props[$this->primaryKeyField()]);
+			$tokens = array();
+			foreach($props as $prop => $value) {
+				$tokens[$prop] = ':'.$prop;
+			}
+			
 			$success = true;
-			// only go through with the save if the model is unsaved or has changes
-			if (count($this->_changes) || !$this->_saved) {
-				if ($this->_saved) {
-					$q = new DataPane\Query('update', $this->tableName(), array(
-						'values' => $this->_changes,
-						'where' => new DataPane\ConditionSet(array($this->primaryKeyField() => $this->primaryKey())),
-						'limit' => 1
-					));
-				} else {
-					$q = new DataPane\Query('insert', $this->tableName(), array('values' => $this->_changes));
+			if ($this->_saved) {
+				$query = new Query(Query::UPDATE);
+				$query->table($this->tableName())
+					->set($tokens)
+					->where($this->primaryKeyField().' = '.$this->primaryKey())
+					->limit(1);
+			} else {
+				$query = new Query(Query::INSERT);
+				$query->table($this->tableName())
+					->set($tokens);
+			}
+			
+			if ($success = $query->execute($props)) {
+				$this->_stored = $props + $this->_stored;
+				$this->_changes = array();
+						
+				if ($query->type == Query::INSERT) {
+					$this->_stored[$this->primaryKeyField()] = Data::connection($this->connectionName())->lastInsertId();
 				}
 				
-				if ($success = Data::source($this->_dataSource)->query($q)) {
-					$this->_stored = $this->_changes + $this->_stored;
-					$this->_changes = array();
-							
-					if ($q->type == 'insert') {
-						$this->_stored[$this->primaryKeyField()] = Data::source($this->_dataSource)->insertId();
-					}
-					
-					$this->_saved = true;
-				}
+				$this->_saved = true;
 			}
 			
 			// save model relations
@@ -320,7 +308,7 @@
 				$this->afterSave();
 				return $success;
 			} else {
-				throw new Exception\Model('Could not save model: '.Data::source($this->_dataSource)->error());
+				throw new Exception\Model('Could not save model: '.Data::connection($this->connectionName())->errorInfo());
 			}
 		}
 		
@@ -337,7 +325,11 @@
 		 * Returns true if validation passes
 		 */
 		public function validate($relationships = true) {
-			$validate = Validator::checkObject($this, $this->_validate);
+			if(!$this->beforeValidate()) {
+				return false;
+			}
+			
+			$validate = Validator::checkObject($this, static::$_validate);
 			if (is_array($validate)) {
 				$this->_errors = $validate;
 			} else {
@@ -415,26 +407,25 @@
 		}
 		
 		public static function propertyExists($property) {
-			return array_key_exists($property, static::properties());
+			return array_key_exists($property, static::$_properties);
 		}
 		
 		public function relate($alias) {
 			if (isset($this->_relations[$alias])) {
 				return $this->_relations[$alias];
-			} elseif (isset($this->_related[$alias])) {
+			} elseif (isset(static::$_related[$alias])) {
 				// create the relation object
-				$related = $this->_related[$alias];
+				$related = static::$_related[$alias];
 				if (is_string($related)) {
 					$related = array('type' => $related);
 				}
-				$related['objectAlias'] = $alias;
+				$related['alias'] = $alias;
 				if (!isset($related['model'])) {
 					$related['model'] = $alias;
 				}
-				$related['subject'] = $this;
 				
 				$class = '\\Corelativ\\Factory\\'.$related['type'];
-				return $this->_relations[$alias] = new $class($related);
+				return $this->_relations[$alias] = new $class($related, $this);
 			} else {
 				return false;
 			}
@@ -484,56 +475,40 @@
 		}
 		
 		public function primaryKey() {
-			return $this->_stored[$this->_primaryKeyField];
+			return $this->_stored[$this->primaryKeyField()];
 		}
 		
 		public static function connectionName() {
-			$c = get_called_class();
-			if (!isset(self::$_connectionNames[$c])) {
-				$v = get_class_vars($c);
-				self::$_connectionNames[$c] = $v['_connectionName'];
-			}
-			return self::$_connectionNames[$c];
+			return static::$_connectionName;
 		}
 		
 		public static function modelName() {
-			$c = get_called_class();
-			if (!isset(self::$_modelNames[$c])) {
-				$cParts = explode('\\', $c);
-				self::$_modelNames[$c] = end($cParts);
-			}
-			return self::$_modelNames[$c];
+			$c = explode('\\', get_called_class());
+			return end($c);
 		}
 		
 		public static function tableName() {
-			$c = get_called_class();
-			if (!isset(self::$_tableNames[$c])) {
-				$v = get_class_vars($c);
-				self::$_tableNames[$c] = isset($v['_tableName'])
-					? $v['_tableName']
-					: static::modelName();
-			}
-			return self::$_tableNames[$c];
+			return static::$_tableName === null
+				? static::modelName()
+				: static::$_tableName;
 		}
 		
 		public static function properties() {
-			$v = get_class_vars(get_called_class());
-			return $v['_properties'];
+			return static::$_properties;
+		}
+		
+		public static function related() {
+			return static::$_related;
 		}
 		
 		public static function primaryKeyField() {
-			$c = get_called_class();
-			if (!isset(self::$_primaryKeyFields[$c])) {
-				foreach (static::properties() as $prop => $config) {
-					if (isset($config['index']) && $config['index'] == Model::INDEX_PRIMARY) {
-						return self::$_primaryKeyFields[$c] = $prop;
-					}
-				}
+			if(static::$_primaryKeyField !== null) {
+				return static::$_primaryKeyField;
+			} elseif(static::propertyExists('id')) {
+				return 'id';
 			} else {
-				return self::$_primaryKeyFields[$c];
+				return null;
 			}
-			
-			throw new Exception\Model('No primary key defined for model: '.$c);
 		}
 		
 		public static function defaultValue($prop) {

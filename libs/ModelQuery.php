@@ -4,32 +4,40 @@
 	    \DataPane\Query;
 	
 	class ModelQuery extends Query {
-		protected $_Object;
+		protected $_modelClass;
 		
-		public function __construct($type, $object) {
+		public function __construct($type, $modelClass) {
 			parent::__construct($type);
-			$this->_Object = $object;
+			$this->_modelClass = $modelClass;
 		}
 		
 		public function fetchAll($params = array()) {
-			$statement = Data::connection($this->_Object->connectionName())->prepare($this);
-			$statement->execute($params);
-			$class = get_class($this->_Object);
-			$set = new ModelSet(get_class($this->_Object));
+			$statement = Data::connection(call_user_func(array($this->_modelClass, 'connectionName')))->prepare($this);
+			$statement->execute((array)$params);
+			
+			$class = $this->_modelClass;
+			$set = new ModelSet($class);
 			foreach($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
-				$set->add(new $class($row));
+				$set->push(new $class($row));
 			}
 			return $set;
 		}
 		
 		public function fetch($params = array()) {
-			$statement = Data::connection($this->_Object->connectionName())->prepare($this);
-			$statement->execute($params);
-			$class = get_class($this->_Object);
+			$statement = Data::connection(call_user_func(array($this->_modelClass, 'connectionName')))->prepare($this);
+			$statement->execute((array)$params);
+			$class = $this->_modelClass;
 			if($row = $statement->fetch(\PDO::FETCH_ASSOC)) {
 				return new $class($row);
 			} else {
 				return false;
 			}
+		}
+		
+		public function getSQL($connection = null) {
+			if($connection === null) {
+				$connection = call_user_func(array($this->_modelClass, 'connectionName'));
+			}
+			return Data::connection($connection)->getSQL($this);
 		}
 	}

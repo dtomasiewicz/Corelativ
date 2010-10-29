@@ -41,7 +41,7 @@
 				? $this
 				: $this->_backReference($this, $target);
 			
-			$query = new ModelQuery(ModelQuery::SELECT, $object->modelName());
+			$query = new ModelQuery(ModelQuery::SELECT, $object->modelClass());
 			$query->fields($object->tableName().'.*')
 				->from($this->getFrom());
 			
@@ -56,23 +56,17 @@
 			return $query;
 		}
 		
-		protected function _backReference($object, $target) {
-			while($object instanceof Relation) {
-				if($object->alias() == $target) {
-					return $object;
-				}
-				$object = $object->Subject;
-			}
-			//@todo exception
-			exit('Invalid backward identity: '.$target);
-		}
-		
 		public function findOne($where = null, $target = null) {
 			return $this->find($where, $target)->limit(1);
 		}
 		
-		public function delete($where = null) {
-			$query = new ModelQuery(ModelQuery::DELETE, $object->modelName());
+		public function delete($where = null, $target = null) {
+			$object = $target === null
+				? $this
+				: $this->_backReference($this, $target);
+				
+			$query = new ModelQuery(ModelQuery::DELETE, $object->modelClass());
+			$query->table($object->tableName());
 			$query->from($this->getFrom());
 			
 			if($filters = $this->getFilters()) {
@@ -88,6 +82,17 @@
 		
 		public function foreignKeyField() {
 			return $this->_foreignKeyField;
+		}
+		
+		protected function _backReference($object, $target) {
+			while($object instanceof Relation) {
+				if($object->alias() == $target) {
+					return $object;
+				}
+				$object = $object->Subject;
+			}
+			//@todo exception
+			exit('Invalid backward identity: '.$target);
 		}
 		
 		abstract public function getFilters();

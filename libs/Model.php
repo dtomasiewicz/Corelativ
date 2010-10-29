@@ -260,8 +260,8 @@
 		/**
 		 * Saves models.
 		 */
-		public function save($relationships = true) {
-			if ($this->validate($relationships) !== true) {
+		public function save() {
+			if ($this->validate() !== true) {
 				return false;
 			}
 			
@@ -302,14 +302,10 @@
 			
 			// save model relations
 			if ($success) {
-				if ($relationships) {
-					$this->__saveRelationships();
-				}
 				$this->afterSave();
-				return $success;
-			} else {
-				throw new Exception\Model('Could not save model: '.Data::connection($this->connectionName())->errorInfo());
 			}
+			
+			return $success;
 		}
 		
 		/**
@@ -353,19 +349,16 @@
 		 * Deletes this model.
 		 */
 		public function delete() {
-			$q = new DataPane\Query('delete', $this->tableName(), array(
-				'limit' => 1,
-				'where' => new DataPane\ConditionSet(array($this->primaryKeyField() => $this->primaryKey()))
-			));
+			$q = new Query(Query::DELETE);
+			$q->from($this->tableName())->where('id = ?');
 			
-			if ($result = Data::source($this->_dataSource)->query($q)) {
+			if($result = $q->execute($this->id)) {
 				$pkField = $this->primaryKeyField();
 				$this->_stored[$pkField] = $this->defaultValue($pkField);
 				$this->_saved = false;
-				return $result;
-			} else {
-				throw new Exception\Model('Could not delete model: '.Data::source($this->_dataSource)->error());
 			}
+			
+			return $result;
 		}
 		
 		/**
@@ -431,7 +424,7 @@
 			}
 		}
 		
-		public function factory($model) {
+		public static function factory($model) {
 			return Mapper::factory($model);
 		}
 		

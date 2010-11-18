@@ -403,8 +403,8 @@
 			return array_key_exists($property, static::$_properties);
 		}
 		
-		public function relate($alias) {
-			if (isset($this->_relations[$alias])) {
+		public function relate($alias, $as = null) {
+			if ($as === null && isset($this->_relations[$alias])) {
 				return $this->_relations[$alias];
 			} elseif (isset(static::$_related[$alias])) {
 				// create the relation object
@@ -412,13 +412,22 @@
 				if (is_string($related)) {
 					$related = array('type' => $related);
 				}
+				if($as !== null) {
+					$related['tableAlias'] = $as;
+				}
 				$related['alias'] = $alias;
 				if (!isset($related['model'])) {
 					$related['model'] = $alias;
 				}
-				
 				$class = '\\Corelativ\\Factory\\'.$related['type'];
-				return $this->_relations[$alias] = new $class($related, $this);
+				$relation = new $class($related, $this);
+				
+				// if not using a table alias, store this for future use
+				if($as === null) {
+					$this->_relations[$alias] = $relation;
+				}
+				
+				return $relation;
 			} else {
 				return false;
 			}

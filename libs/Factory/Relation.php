@@ -3,8 +3,22 @@
 	use \Corelativ\ModelQuery;
 	
 	abstract class Relation extends \Corelativ\Factory {
+		
+		/**
+		 * @var Model|Factory The subject of this relationship
+		 */
 		protected $_Subject;
+		
+		/**
+		 * @var string The name of the foreign key used in this relationship.
+		 *             Should be set in the constructor of the extending class.
+		 */
 		protected $_foreignKeyField;
+		
+		/**
+		 * @var string The aliased relationship name (used for detecing
+		 *             foreign key names)
+		 */
 		protected $_alias;
 		
 		public function __construct($config, $subject) {
@@ -13,6 +27,9 @@
 			$this->_alias = isset($config['alias'])
 				? $config['alias']
 				: $config['model'];
+			$this->_tableAlias = isset($config['tableAlias'])
+				? $config['tableAlias']
+				: $this->_alias;
 		}
 		
 		public function __get($name) {
@@ -41,8 +58,8 @@
 				? $this
 				: $this->_backReference($this, $target);
 			
-			$query = new ModelQuery(ModelQuery::SELECT, $object->modelClass());
-			$query->fields($object->tableName().'.*')
+			$query = new ModelQuery(ModelQuery::SELECT, $object->className());
+			$query->fields($object->tableAlias().'.*')
 				->from($this->getFrom());
 			
 			if($filters = $this->getFilters()) {
@@ -65,7 +82,7 @@
 				? $this
 				: $this->_backReference($this, $target);
 				
-			$query = new ModelQuery(ModelQuery::DELETE, $object->modelClass());
+			$query = new ModelQuery(ModelQuery::DELETE, $object->className());
 			$query->table($object->tableName());
 			$query->from($this->getFrom());
 			
@@ -86,7 +103,7 @@
 		
 		protected function _backReference($object, $target) {
 			while($object instanceof Relation) {
-				if($object->alias() == $target) {
+				if($object->tableAlias() == $target) {
 					return $object;
 				}
 				$object = $object->Subject;

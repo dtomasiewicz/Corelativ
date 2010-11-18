@@ -4,18 +4,18 @@
 	    \DataPane\Query;
 	
 	class ModelQuery extends Query {
-		protected $_modelClass;
+		protected $_className;
 		
-		public function __construct($type, $modelClass) {
+		public function __construct($type, $className) {
 			parent::__construct($type);
-			$this->_modelClass = $modelClass;
+			$this->_className = $className;
 		}
 		
 		public function fetchAll($params = array(), $connection = null) {
 			$statement = Data::connection($this->_connectionName($connection))->prepare($this);
 			$statement->execute((array)$params);
 			
-			$class = $this->_modelClass;
+			$class = $this->_className;
 			$set = new ModelSet($class);
 			foreach($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
 				$set->push(new $class($row));
@@ -26,7 +26,7 @@
 		public function fetch($params = array(), $connection = null) {
 			$statement = Data::connection($this->_connectionName($connection))->prepare($this);
 			$statement->execute((array)$params);
-			$class = $this->_modelClass;
+			$class = $this->_className;
 			if($row = $statement->fetch(\PDO::FETCH_ASSOC)) {
 				return new $class($row);
 			} else {
@@ -46,7 +46,7 @@
 			if($override !== null) {
 				return $override;
 			} else {
-				$c = $this->_modelClass;
+				$c = $this->_className;
 				return $c::connectionName();
 			}
 		}

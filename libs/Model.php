@@ -9,6 +9,7 @@
 	
 	abstract class Model implements \Serializable, JSONEncodable {
 		const INDEX_PRIMARY = 'PRIMARY';
+		const INDEX_UNIQUE = 'UNIQUE';
 		const INDEX_INDEX = 'INDEX';
 		const INDEX_FULLTEXT = 'FULLTEXT';
 		
@@ -18,44 +19,11 @@
 		const FIELD_BOOL = 'BOOL';
 		const FIELD_ENUM = 'ENUM';
 		
+		const REL_ONE_TO_MANY = 'OneToMany';
+		const REL_MANY_TO_ONE = 'ManyToOne';
+		
 		protected static $_nextUniqueId = 1;
 		protected $_uniqueId;
-		
-		/**
-		 * @var string The connection used for this model.
-		 */
-		protected static $_connectionName = null;
-		
-		/**
-		 * The name of the database table associated with this model. May be overridden
-		 * in subclasses. Set in constructor.
-		 * @var string
-		 */
-		protected static $_tableName = null;
-		
-		/**
-		 * The field to be used as the primary key. May be overridden in subclasses.
-		 * @var string
-		 */
-		protected static $_primaryKeyField = null;
-		
-		/**
-		 * Array of properties and configurations
-		 * @var array
-		 */
-		protected static $_properties = array();
-		
-		/**
-		 * An associative array describing the relations between this model and other models.
-		 * @var array
-		 */
-		protected static $_related = array();
-		
-		/**
-		 * Associative array of validation instructions for this model.
-		 * @var array
-		 */
-		protected static $_validate = array();
 		
 		/**
 		 * Stores the saved properties of this model. Set in constructor.
@@ -111,7 +79,7 @@
 				
 				$this->_saved = isset($properties[$this->primaryKeyField()]);
 				
-				foreach (static::$_properties as $prop => $cfg) {
+				foreach (static::properties() as $prop => $cfg) {
 					if ($this->_saved) {
 						$this->_stored[$prop] = isset($properties[$prop])
 							? $properties[$prop]
@@ -325,7 +293,7 @@
 				return false;
 			}
 			
-			$validate = Validator::checkObject($this, static::$_validate);
+			$validate = Validator::checkObject($this, static::validation());
 			if (is_array($validate)) {
 				$this->_errors = $validate;
 			} else {
@@ -400,15 +368,16 @@
 		}
 		
 		public static function propertyExists($property) {
-			return array_key_exists($property, static::$_properties);
+			return array_key_exists($property, static::properties());
 		}
 		
 		public function relate($alias, $as = null) {
+			$rel = static::relations();
 			if ($as === null && isset($this->_relations[$alias])) {
 				return $this->_relations[$alias];
-			} elseif (isset(static::$_related[$alias])) {
+			} elseif ( isset($rel[$alias])) {
 				// create the relation object
-				$related = static::$_related[$alias];
+				$related = $rel[$alias];
 				if (is_string($related)) {
 					$related = array('type' => $related);
 				}
@@ -477,40 +446,38 @@
 		}
 		
 		public function primaryKey() {
-			return $this->_stored[$this->primaryKeyField()];
+			return $this->_stored[static::primaryKeyField()];
 		}
 		
 		public static function connectionName() {
-			return static::$_connectionName;
+			return 'default';
 		}
 		
 		public static function modelName() {
 			$c = explode('\\', get_called_class());
-			return end($c);
+			return array_pop($c);
 		}
 		
 		public static function tableName() {
-			return static::$_tableName === null
-				? static::modelName()
-				: static::$_tableName;
+			return static::modelName();
 		}
 		
 		public static function properties() {
-			return static::$_properties;
+			return array(
+				'id' => array('type' => self::FIELD_INT)
+			);
 		}
 		
-		public static function related() {
-			return static::$_related;
+		public static function validation() {
+			return array();
+		}
+		
+		public static function relations() {
+			return array();
 		}
 		
 		public static function primaryKeyField() {
-			if(static::$_primaryKeyField !== null) {
-				return static::$_primaryKeyField;
-			} elseif(static::propertyExists('id')) {
-				return 'id';
-			} else {
-				return null;
-			}
+			return 'id';
 		}
 		
 		public static function defaultValue($prop) {

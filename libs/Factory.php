@@ -42,7 +42,7 @@
 			$this->_tableName = $c::tableName();
 			$this->_primaryKeyField = $c::primaryKeyField();
 			$this->_connectionName = $c::connectionName();
-			$this->_related = $c::related();
+			$this->_related = $c::relations();
 			$this->_tableAlias = isset($config['tableAlias'])
 				? $config['tableAlias']
 				: $this->_tableName;
@@ -143,9 +143,9 @@
 			return $this->_primaryKeyField;
 		}
 		
-		public function related() {
+		public function relations() {
 			$c = $this->_className;
-			return $c::related();
+			return $c::relations();
 		}
 		
 		public function connectionName() {

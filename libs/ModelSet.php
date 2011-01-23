@@ -16,8 +16,8 @@
 		public $totalRecords;
 		public $totalPages;
 		
-		public function indexByPrimaryKey() {
+		public function mapByPrimaryKey() {
 			$class = $this->type();
-			parent::indexBy($class::primaryKeyField());
+			return parent::mapBy($class::primaryKeyField());
 		}
 	}

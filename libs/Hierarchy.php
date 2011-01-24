@@ -1,6 +1,6 @@
 <?php
 	namespace Corelativ;
-	use \Frawst\Library\Matrix;
+	use \Frawst\Matrix;
 	
 	/**
 	 * Hierarchy-based model collection class to allow for easy hierarchy

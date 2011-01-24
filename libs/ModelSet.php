@@ -1,7 +1,7 @@
 <?php
 	namespace Corelativ;
 	use \Corelativ\Model,
-		\Frawst\Library\Collection;
+		\Frawst\Collection;
 	
 	/**
 	 * Model collection class

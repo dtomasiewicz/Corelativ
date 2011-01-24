@@ -1,8 +1,8 @@
 <?php
 	namespace Corelativ;
 	use \Corelativ\Factory,
-		\Frawst\Library\Validator,
-		\Frawst\Library\JSONEncodable,
+		\Frawst\Validator,
+		\Frawst\JSONEncodable,
 		\Frawst\Exception,
 		\DataPane\Data,
 		\DataPane\Query;

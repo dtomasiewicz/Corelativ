@@ -59,7 +59,7 @@
 				: $this->_backReference($this, $target);
 			
 			$query = new ModelQuery(ModelQuery::SELECT, $object->className());
-			$query->fields($object->tableAlias().'.*')
+			$query->fields('`'.$object->tableAlias().'`.*')
 				->from($this->getFrom());
 			
 			if($filters = $this->getFilters()) {

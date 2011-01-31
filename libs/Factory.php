@@ -45,7 +45,7 @@
 			$this->_related = $c::relations();
 			$this->_tableAlias = isset($config['tableAlias'])
 				? $config['tableAlias']
-				: $this->_tableName;
+				: null;
 		}
 		
 		public function __get($name) {
@@ -91,7 +91,7 @@
 		
 		public function find($where = null) {
 			$query = new ModelQuery(ModelQuery::SELECT, $this->_className);
-			$query->fields($this->tableAlias().'.*')->from($this->_from());
+			$query->fields('`'.$this->tableAlias().'`.*')->from($this->_from());
 			if($where !== null) {
 				$query->where($where);
 			}
@@ -124,7 +124,7 @@
 		}
 		
 		public function tableAlias() {
-			return $this->_tableAlias;
+			return $this->_tableAlias === null ? $this->_tableName : $this->_tableAlias;
 		}
 		
 		/**
@@ -132,7 +132,11 @@
 		 *                for this factory
 		 */
 		protected function _from() {
-			return $this->_tableName.' AS '.$this->_tableAlias;
+			$from = '`'.$this->_tableName.'`';
+			if($this->_tableAlias !== null) {
+				$from .= ' AS `'.$this->_tableAlias.'`';
+			}
+			return $from;
 		}
 		
 		public function className() {

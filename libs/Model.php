@@ -38,8 +38,7 @@
 		protected $_changes;
 		
 		/**
-		 * Whether or not this model has been saved to the data source since the
-		 * most recent change. Set in constructor.
+		 * Whether or not this model has been saved to the data source.
 		 * @var boolean
 		 */
 		protected $_saved;

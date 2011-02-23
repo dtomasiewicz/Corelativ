@@ -38,6 +38,13 @@
 		protected $_changes;
 		
 		/**
+		 * Stores offsets for fields that are incremented/decremented as opposed
+		 * to being explicitely set.
+		 * @var array
+		 */
+		protected $_offsets;
+		
+		/**
 		 * Whether or not this model has been saved to the data source.
 		 * @var boolean
 		 */
@@ -75,6 +82,7 @@
 				$this->_uniqueId = self::$_nextUniqueId++;
 				$this->_stored = array();
 				$this->_changes = array();
+				$this->_offsets = array();
 				
 				$this->_saved = isset($properties[$this->primaryKeyField()]);
 				
@@ -91,6 +99,13 @@
 					}
 				}
 			}
+		}
+		
+		/**
+		 * Reloads from the data source.
+		 */
+		public function reload() {
+			//@todo this
 		}
 		
 		public function __get($property) {
@@ -132,79 +147,103 @@
 		 */
 		public function get($property = null, $storedValue = false) {
 			if (is_null($property)) {
-				return $this->_changes + $this->_stored;
-			} elseif ($this->propertyExists($property)) {
-				return !$storedValue && isset($this->_changes[$property])
-					? $this->_changes[$property]
-					: $this->_stored[$property];
-			} elseif ($rel = $this->relate($property)) {
-				if ($rel instanceof Factory\Singular) {
-					return $rel->fetch();
-				} else {
-					return $rel;
+				$vals = array();
+				foreach($this->properties() as $prop => $cfg) {
+					$vals[$prop] = $this->get($prop);
 				}
+				return $vals;
+			} elseif ($this->propertyExists($property)) {
+				if($storedValue && $this->saved()) {
+					return $this->_stored[$property];
+				} else {
+					$val = isset($this->_changes[$property])
+						? $this->_changes[$property]
+						: $this->_stored[$property];
+					if(isset($this->_offsets[$property])) {
+						$val += $this->_offsets[$property];
+					}
+					return $val;
+				}
+			} elseif ($rel = $this->relate($property)) {
+				return $rel;
 			} else {
-				throw new Exception\Model('Unrecognized property: '.$property);
+				throw new Exception\Model('Unrecognized property/relation: '.$property);
 			}
 		}
 		
 		/**
-		 * Sets the value of a model property or relation. You can flag autoRelate
-		 * to false to avoid setting any relations, if your data is compromisable
-		 * (for example, if you are simply set()ing form data, users may be able to
-		 * cross-site-script to change the relations).
+		 * Sets the value of a model property.
 		 * 
-		 * @return true if everything set correctly, false if any property failed to
-		 *         set. since primary keys are ignored (they should be treated as
-		 *         immutable) a primary key may fail to set but still return true.
+		 * @signature[1] (string $name, mixed $value)
+		 * @param string $name The name of the property to set
+		 * @param mixed $value The value to set the property to
 		 * 
-		 * @signature[1] (string $name, mixed $value[, boolean $autoRelate = true])
-		 * @param string $name The name of the property or relation to set
-		 * @param mixed $value The value to set the property or relation to
-		 * @param boolean $autoRelate Whether or not to allow relation setting
-		 * 
-		 * @signature[2] (array $values[, boolean $autoRelate = true])
+		 * @signature[2] (array $values)
 		 * @param array $values An array of property => value pairs to be set
-		 * @param boolean $autoRelate Whether or not to allow relation setting
 		 */
-		public function set($property, $value = '', $autoRelate = true) {
-			$success = true;
+		public function set($property, $value = '') {
 			if (is_array($property)) {
 				// signature[2]
-				$autoRelate = $value;
-				if ($autoRelate !== false) {
-					$autoRelate = true;
-				}
-				
 				foreach ($property as $p => $v) {
-					$this->set($p, $v, $autoRelate);
+					$this->set($p, $v);
 				}
 			} else {
 				if ($this->propertyExists($property)) {
 					if ($property != $this->primaryKeyField()) {
 						$this->_changes[$property] = $value;
-					} elseif ($value != $this->primaryKey()) {
-						throw new Exception\Model('Trying to set a primary key different from the saved primary key.');
+						if(isset($this->_offsets[$property])) {
+							unset($this->_offsets[$property]);
+						}
 					}
-				} elseif ($autoRelate && ($rel = $this->relate($property))) {
-					$rel->set($value);
 				} else {
-					throw new Exception\Model('trying to set invalid model property or relation: '.$property);
+					throw new Exception\Model('Trying to set invalid model property: '.$property);
 				}
 			}
 		}
 		
+		public function offset($property, $offset) {
+			if($this->propertyExists($property)) {
+				$this->_offsets[$property] = isset($this->_offsets[$property])
+					? $this->_offsets[$property] + $offset
+					: $offset;
+				
+				return $this->get($property);
+			}
+		}
+		
 		/**
-		 * Revert changes to a model and its relations (or to specified properties)
+		 * Increments a given field.
+		 * @param  string $property The name of the property to be incremented
+		 * @param  bool   $post Whether to evaluate the return as post-increment or pre-increment.
+		 * @return int    The value before being incremented if $post is true, else the value
+		 *                after being incremented.
+		 */
+		public function increment($property, $post = true) {
+			return $post ? $this->offset($property, 1)-1 : $this->offset($property, 1);
+		}
+		
+		/**
+		 * Decrements a given field.
+		 * @param  string $property The name of the property to be decremented
+		 * @param  bool   $post Whether to evaluate the return as post-decrement or pre-decrement.
+		 * @return int    The value before being decremented if $post is true, else the value
+		 *                after being decremented.
+		 */
+		public function decrement($property, $post = true) {
+			return $post ? $this->offset($property, -1)+1 : $this->offset($property, -1);
+		}
+		
+		/**
+		 * Revert changes to a model.
 		 * 
 		 * @interface model
 		 * 
 		 * @signature[1] ([string $property = null])
-		 * @param string $property The property/relation to be reverted. If null, all
-		 *                         properties and relations will be reverted.
+		 * @param string $property The property to be reverted. If null, all
+		 *                         properties and will be reverted.
 		 * 
 		 * @signature[2] (array $properties)
-		 * @param array $properties An array of properties/relations to be reverted
+		 * @param array $properties An array of properties to be reverted
 		 */
 		public function revert($property = null) {
 			if (is_array($property)) {
@@ -213,13 +252,14 @@
 					$this->revert($p);
 				}
 			} elseif (is_null($property)) {
-				$this->_changes = array();
-				$this->_relations = array();
+				$this->revert(array_keys($this->properties()));
 			} else {
-				if ($this->propertyExists($property) && isset($this->_changes[$property])) {
-					unset($this->_changes[$property]);
-				} elseif (isset($this->_relations[$property])) {
-					unset($this->_relations[$property]);
+				if ($this->propertyExists($property)) {
+					if($this->saved() && isset($this->_changes[$property])) {
+						unset($this->_changes[$property]);
+					} elseif(!$this->saved()) {
+						$this->_changes[$property] = $this->defaultValue($property);
+					}
 				}
 			}
 		}
@@ -228,37 +268,37 @@
 		 * Saves models.
 		 */
 		public function save() {
-			if ($this->validate() !== true) {
-				return false;
+			$set = array();
+			$params = array();
+			foreach($this->_changes as $prop => $val) {
+				$set[] = $prop.'=:'.$prop;
+				$params[$prop] = $val;
 			}
-			
-			if (!$this->beforeSave()) {
-				return false;
-			}
-			
-			$props = $this->get();
-			unset($props[$this->primaryKeyField()]);
-			$tokens = array();
-			foreach($props as $prop => $value) {
-				$tokens[$prop] = ':'.$prop;
+			foreach($this->_offsets as $prop => $offset) {
+				if($offset > 0) {
+					$set[] = $prop.'='.$prop.'+'.$offset;
+				} elseif($offset < 0) {
+					$set[] = $prop.'='.$prop.$offset;
+				}
 			}
 			
 			$success = true;
 			if ($this->_saved) {
-				$query = new Query(Query::UPDATE);
+				$query = new ModelQuery(Query::UPDATE, get_class($this));
 				$query->table($this->tableName())
-					->set($tokens)
-					->where($this->primaryKeyField().' = '.$this->primaryKey())
+					->set($set)
+					->where($this->primaryKeyField().'='.$this->primaryKey())
 					->limit(1);
 			} else {
-				$query = new Query(Query::INSERT);
+				$query = new Query(Query::INSERT, get_class($this));
 				$query->table($this->tableName())
-					->set($tokens);
+					->set($set);
 			}
 			
-			if ($success = $query->execute($props)) {
-				$this->_stored = $props + $this->_stored;
+			if ($success = $query->execute($params)) {
+				$this->_stored = $this->get();
 				$this->_changes = array();
+				$this->_offsets = array();
 						
 				if ($query->type == Query::INSERT) {
 					$this->_stored[$this->primaryKeyField()] = Data::connection($this->connectionName())->lastInsertId();
@@ -267,46 +307,19 @@
 				$this->_saved = true;
 			}
 			
-			// save model relations
-			if ($success) {
-				$this->afterSave();
-			}
-			
 			return $success;
-		}
-		
-		/**
-		 * Saves relationships.
-		 */
-		private function __saveRelationships() {
-			foreach ($this->_relations as $relation) {
-				$relation->save();
-			}
 		}
 		
 		/**
 		 * Returns true if validation passes
 		 */
-		public function validate($relationships = true) {
-			if(!$this->beforeValidate()) {
-				return false;
-			}
+		public function validate() {
 			
 			$validate = Validator::checkObject($this, static::validation());
 			if (is_array($validate)) {
 				$this->_errors = $validate;
 			} else {
 				$this->_errors = array();
-			}
-			
-			if ($relationships) {
-				// validate relations too
-				foreach ($this->_relations as $alias => $relation) {
-					$rValidate = $relation->validate();
-					if (is_array($rValidate)) {
-						$this->_errors[$alias] = $rValidate;
-					}
-				}
 			}
 			
 			return (bool) !(count($this->_errors));
@@ -316,7 +329,7 @@
 		 * Deletes this model.
 		 */
 		public function delete() {
-			$q = new Query(Query::DELETE);
+			$q = new ModelQuery(Query::DELETE, get_class($this));
 			$q->from($this->tableName())->where('id = ?');
 			
 			if($result = $q->execute($this->id)) {

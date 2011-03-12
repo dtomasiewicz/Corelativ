@@ -1,0 +1,82 @@
+Relationships defined as such:
+
+class School extends \Corelativ\Model {
+	protected static $_related = array(
+		'Courses' => array('type' => 'OneToMany', 'model' => 'Course') // key defaults to schoolId
+	}
+}
+
+class Student extends \Corelativ\Model {
+	protected static $_related = array(
+		'StudentCourses' => array('type' => 'OneToMany', 'model' => 'StudentCourse') // key defaults to studentId
+	}
+}
+
+class Course extends \Corelativ\Model {
+	protected static $_related = array(
+		'School' => array('type' => 'ManyToOne'), //model defaults to School, key defaults to schoolId
+		'StudentCourses' => array('type' => 'OneToMany', 'model' => 'StudentCourse') // key defaults to studentId
+	}
+}
+
+class StudentCourse extends \Corelativ\Model {
+	protected static $_related = array(
+		'Student' => array('type' => 'ManyToOne'), // model defaults to Student, key defaults to studentId
+		'Course' => array('type' => 'ManyToOne') // model defaults to Course, key defaults to courseId
+	}
+}
+
+Find all undergraduate students enrolled in a course...
+
+Assume $school->id = 5
+
+$school->Courses->StudentCourses->Student->find('Student.type = "undergraduate"')->fetchAll();
+
+becomes...
+
+SELECT Student.*
+FROM
+	Course LEFT JOIN StudentCourse ON Course.id = StudentCourse.courseId
+		LEFT JOIN Student ON StudentCourse.studentId = Student.id
+WHERE
+	School.id = 5 AND Student.type = "undergraduate"
+
+What is happening:
+
+$school->Courses as an alias to $school->relate('Course'), the relationship which is defined in the model
+definition. $school->relate('Course') returns a Course factory of type OneToMany.
+
+Factory
+(abs Relation ext Factory)
+OneToMany ext Relation
+ManyToOne ext Relation
+
+Relation object constructor: object (name of model), subject (Model or Factory)
+
+so $school->relate('Course') returns new OneToMany('Course', $school), which we'll call $courseFactory
+
+Courses->StudentCourses looks for a relation named "StudentCourses" in the Course model definition. It's found, so
+it mimicks $courseFactory->relate('StudentCourse') which returns a OneToMany factory
+
+$courseFactory->StudentCourses returns new OneToMany('StudentCourse', $courseFactory), which we'll call $studentCourseFactory
+
+StudentCourses->Student looks for a relation named "Student" in the StudentCourse model definition. It's found, so
+it mimicks $studentCourseFactory->relate('Student') which returns a ManyToOne factory
+
+$studentCourseFactory->relate('Student') returns new ManyToOne('Student', $studentCourseFactory), which we call $studentFactory
+
+Finally, the find() method is called, which returns a ModelQuery ($query). The linking of factories allows us to establish joins now.
+
+$studentFactory->find() calls $studentCourseFactory->getFrom(), which calls $courseFactory->getFrom()
+
+NOTE: if the top-level parent is a model, getFrom() is not called. If it is a Factory, getFrom() is called, but Factory::getFrom does
+not attempt to access any parents, since it shouldn't have any.
+
+$res = $courseFactory retrieves the school ID and passes it on
+$courseFactory->getFrom() returns 'Course'
+ --> $studentCourseFactory returns 'Course LEFT JOIN StudentCourse ON Course.id = StudentCourse.id'
+$from = --> $studentFactory returns 'Course LEFT JOIN StudentCourse ON Course.id = StudentCourse.courseId LEFT JOIN Student ON StudentCourse.studentId = Student.id'
+
+$query->from($from)->where($res)->where('Student.type = "undergraduate"')->fetchAll()
+
+AAAND we're caught up.

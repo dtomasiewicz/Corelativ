@@ -22,53 +22,53 @@
 		const REL_ONE_TO_MANY = 'OneToMany';
 		const REL_MANY_TO_ONE = 'ManyToOne';
 		
-		protected static $_nextUniqueId = 1;
-		protected $_uniqueId;
+		private static $nextUniqueId = 1;
+		private $uniqueId;
 		
 		/**
 		 * Stores the saved properties of this model. Set in constructor.
 		 * @var array
 		 */
-		protected $_stored;
+		private $stored;
 		
 		/**
 		 * Stores the unsaved properties of this model. Set in constructor.
 		 * @var array
 		 */
-		protected $_changes;
+		private $changes;
 		
 		/**
 		 * Stores offsets for fields that are incremented/decremented as opposed
 		 * to being explicitely set.
 		 * @var array
 		 */
-		protected $_offsets;
+		private $offsets;
 		
 		/**
 		 * Whether or not this model has been saved to the data source.
 		 * @var boolean
 		 */
-		protected $_saved;
+		private $saved;
 		
 		/**
 		 * Relation models used for getting/setting associated models.
 		 * @var array
 		 */
-		protected $_relations = array();
+		private $relations = array();
 		
 		/**
 		 * An associative array of validation errors from the most recent validate()
 		 * call on this model. Set in constructor.
 		 * @var array
 		 */
-		protected $_errors = array();
+		private $errors = array();
 		
 		/**
 		 * When this model is acting as a proxy for a relationship or factory, this stores
 		 * the factory objec that defines how this relationship behaves. Set in constructor.
 		 * @var Factory
 		 */
-		protected $_Factory;
+		private $Factory;
 		
 		/**
 		 * Constructor. This is the only place a primary key can be set from outside
@@ -77,25 +77,25 @@
 		public function __construct($properties = array()) {
 			if ($properties instanceof Factory) {
 				// empty model for use by a factory
-				$this->_Factory = $properties;
+				$this->Factory = $properties;
 			} else {
-				$this->_uniqueId = self::$_nextUniqueId++;
-				$this->_stored = array();
-				$this->_changes = array();
-				$this->_offsets = array();
+				$this->uniqueId = self::$nextUniqueId++;
+				$this->stored = array();
+				$this->changes = array();
+				$this->offsets = array();
 				
-				$this->_saved = isset($properties[$this->primaryKeyField()]);
+				$this->saved = isset($properties[$this->primaryKeyField()]);
 				
 				foreach (static::properties() as $prop => $cfg) {
-					if ($this->_saved) {
-						$this->_stored[$prop] = isset($properties[$prop])
+					if ($this->saved) {
+						$this->stored[$prop] = isset($properties[$prop])
 							? $properties[$prop]
 							: $this->defaultValue($prop);
 					} else {
-						$this->_changes[$prop] = isset($properties[$prop])
+						$this->changes[$prop] = isset($properties[$prop])
 							? $properties[$prop]
 							: $this->defaultValue($prop);
-						$this->_stored[$prop] = null;
+						$this->stored[$prop] = null;
 					}
 				}
 			}
@@ -114,7 +114,7 @@
 			} elseif($rel = $this->relate($property)) {
 				return $rel;
 			} elseif($property == 'Factory') {
-				return $this->_Factory;
+				return $this->Factory;
 			} else {
 				//@todo exception
 				exit('invalid model property: '.$property);
@@ -130,7 +130,7 @@
 		}
 		
 		public function unserialize($properties) {
-			$this->__construct(unserialize($properties));
+			$this->construct(unserialize($properties));
 		}
 		
 		public function toJSON() {
@@ -154,13 +154,13 @@
 				return $vals;
 			} elseif ($this->propertyExists($property)) {
 				if($storedValue && $this->saved()) {
-					return $this->_stored[$property];
+					return $this->stored[$property];
 				} else {
-					$val = isset($this->_changes[$property])
-						? $this->_changes[$property]
-						: $this->_stored[$property];
-					if(isset($this->_offsets[$property])) {
-						$val += $this->_offsets[$property];
+					$val = isset($this->changes[$property])
+						? $this->changes[$property]
+						: $this->stored[$property];
+					if(isset($this->offsets[$property])) {
+						$val += $this->offsets[$property];
 					}
 					return $val;
 				}
@@ -190,9 +190,9 @@
 			} else {
 				if ($this->propertyExists($property)) {
 					if ($property != $this->primaryKeyField()) {
-						$this->_changes[$property] = $value;
-						if(isset($this->_offsets[$property])) {
-							unset($this->_offsets[$property]);
+						$this->changes[$property] = $value;
+						if(isset($this->offsets[$property])) {
+							unset($this->offsets[$property]);
 						}
 					}
 				} else {
@@ -203,8 +203,8 @@
 		
 		public function offset($property, $offset) {
 			if($this->propertyExists($property)) {
-				$this->_offsets[$property] = isset($this->_offsets[$property])
-					? $this->_offsets[$property] + $offset
+				$this->offsets[$property] = isset($this->offsets[$property])
+					? $this->offsets[$property] + $offset
 					: $offset;
 				
 				return $this->get($property);
@@ -255,10 +255,10 @@
 				$this->revert(array_keys($this->properties()));
 			} else {
 				if ($this->propertyExists($property)) {
-					if($this->saved() && isset($this->_changes[$property])) {
-						unset($this->_changes[$property]);
+					if($this->saved() && isset($this->changes[$property])) {
+						unset($this->changes[$property]);
 					} elseif(!$this->saved()) {
-						$this->_changes[$property] = $this->defaultValue($property);
+						$this->changes[$property] = $this->defaultValue($property);
 					}
 				}
 			}
@@ -270,11 +270,11 @@
 		public function save() {
 			$set = array();
 			$params = array();
-			foreach($this->_changes as $prop => $val) {
+			foreach($this->changes as $prop => $val) {
 				$set[] = $prop.'=:'.$prop;
 				$params[$prop] = $val;
 			}
-			foreach($this->_offsets as $prop => $offset) {
+			foreach($this->offsets as $prop => $offset) {
 				if($offset > 0) {
 					$set[] = $prop.'='.$prop.'+'.$offset;
 				} elseif($offset < 0) {
@@ -283,7 +283,7 @@
 			}
 			
 			$success = true;
-			if ($this->_saved) {
+			if ($this->saved) {
 				$query = new ModelQuery(Query::UPDATE, get_class($this));
 				$query->table($this->tableName())
 					->set($set)
@@ -296,15 +296,15 @@
 			}
 			
 			if ($success = $query->execute($params)) {
-				$this->_stored = $this->get();
-				$this->_changes = array();
-				$this->_offsets = array();
+				$this->stored = $this->get();
+				$this->changes = array();
+				$this->offsets = array();
 						
 				if ($query->type == Query::INSERT) {
-					$this->_stored[$this->primaryKeyField()] = Data::connection($this->connectionName())->lastInsertId();
+					$this->stored[$this->primaryKeyField()] = Data::connection($this->connectionName())->lastInsertId();
 				}
 				
-				$this->_saved = true;
+				$this->saved = true;
 			}
 			
 			return $success;
@@ -317,12 +317,12 @@
 			
 			$validate = Validator::checkObject($this, static::validation());
 			if (is_array($validate)) {
-				$this->_errors = $validate;
+				$this->errors = $validate;
 			} else {
-				$this->_errors = array();
+				$this->errors = array();
 			}
 			
-			return (bool) !(count($this->_errors));
+			return (bool) !(count($this->errors));
 		}
 				
 		/**
@@ -334,8 +334,8 @@
 			
 			if($result = $q->execute($this->id)) {
 				$pkField = $this->primaryKeyField();
-				$this->_stored[$pkField] = $this->defaultValue($pkField);
-				$this->_saved = false;
+				$this->stored[$pkField] = $this->defaultValue($pkField);
+				$this->saved = false;
 			}
 			
 			return $result;
@@ -346,24 +346,24 @@
 		 */
 		public function errors($field = null) {
 			if (is_null($field)) {
-				return $this->_errors;
+				return $this->errors;
 			} else {
-				return isset($this->_errors[$field])
-					? $this->_errors[$field]
+				return isset($this->errors[$field])
+					? $this->errors[$field]
 					: array();
 			}
 		}
 		
 		public function setErrors($field, $errors = array()) {
-			$this->_errors[$field] = $errors;
+			$this->errors[$field] = $errors;
 		}
 		
 		public function addError($field, $error) {
-			if ($old = $this->_errors[$field]) {
+			if ($old = $this->errors[$field]) {
 				$old[] = $error;
-				$this->_errors[$field] = $old;
+				$this->errors[$field] = $old;
 			} else {
-				$this->_errors[$field] = array($error);
+				$this->errors[$field] = array($error);
 			}
 		}
 		
@@ -372,7 +372,7 @@
 				$fields = array($fields);
 			}
 			foreach ($fields as $field) {
-				if (isset($this->_errors[$field]) && count($this->_errors[$field]) > 0) {
+				if (isset($this->errors[$field]) && count($this->errors[$field]) > 0) {
 					return false;
 				}
 			}
@@ -385,8 +385,8 @@
 		
 		public function relate($alias, $as = null) {
 			$rel = static::relations();
-			if ($as === null && isset($this->_relations[$alias])) {
-				return $this->_relations[$alias];
+			if ($as === null && isset($this->relations[$alias])) {
+				return $this->relations[$alias];
 			} elseif ( isset($rel[$alias])) {
 				// create the relation object
 				$related = $rel[$alias];
@@ -400,12 +400,12 @@
 				if (!isset($related['model'])) {
 					$related['model'] = $alias;
 				}
-				$class = '\\Corelativ\\Factory\\'.$related['type'];
+				$class = '\Corelativ\Factory\\'.$related['type'];
 				$relation = new $class($related, $this);
 				
 				// if not using a table alias, store this for future use
 				if($as === null) {
-					$this->_relations[$alias] = $relation;
+					$this->relations[$alias] = $relation;
 				}
 				
 				return $relation;
@@ -444,21 +444,21 @@
 		public function saved($field = null) {
 			if (!is_null($field)) {
 				if ($this->propertyExists($field)) {
-					return $this->_stored[$field];
+					return $this->stored[$field];
 				} else {
 					throw new Exception\Model('Attempting to access saved value of invalid property: '.$field);
 				}
 			}
 			
-			return $this->_saved;
+			return $this->saved;
 		}
 		
 		public function uniqueId() {
-			return $this->_uniqueId;
+			return $this->uniqueId;
 		}
 		
 		public function primaryKey() {
-			return $this->_stored[static::primaryKeyField()];
+			return $this->stored[static::primaryKeyField()];
 		}
 		
 		public static function connectionName() {

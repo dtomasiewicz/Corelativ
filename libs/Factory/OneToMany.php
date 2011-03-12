@@ -7,17 +7,18 @@
 		
 		public function __construct($config, $subject) {
 			parent::__construct($config, $subject);
-			$this->_foreignKeyField = isset($config['key'])
+			$this->foreignKeyField(isset($config['key'])
 				? $config['key']
-				: lcfirst($this->_Subject->tableName()).ucfirst($this->primaryKeyField());
+				: lcfirst($this->subject()->tableName()).ucfirst($this->primaryKeyField())
+			);
 		}
 		
 		public function getFrom() {
-			if($this->_Subject instanceof Relation) {
-				return $this->_Subject->getFrom().' LEFT JOIN '.$this->_from().' ON '.
-					$this->_Subject->tableAlias().'.'.$this->_Subject->primaryKeyField().' = '.$this->tableAlias().'.'.$this->foreignKeyField();
-			} elseif($this->_Subject instanceof Factory || $this->_Subject instanceof Model) {
-				return $this->_from();
+			if($this->subject() instanceof Relation) {
+				return $this->subject()->getFrom().' LEFT JOIN '.$this->from().' ON '.
+					$this->subject()->tableAlias().'.'.$this->subject()->primaryKeyField().' = '.$this->tableAlias().'.'.$this->foreignKeyField();
+			} elseif($this->subject() instanceof Factory || $this->subject() instanceof Model) {
+				return $this->from();
 			} else {
 				//@todo exception
 				exit('bad subject');
@@ -25,10 +26,10 @@
 		}
 		
 		public function getFilters() {
-			if($this->_Subject instanceof Model) {
-				return $this->tableAlias().'.'.$this->foreignKeyField().' = '.$this->_Subject->primaryKey();
-			} elseif($this->_Subject instanceof Relation) {
-				return $this->_Subject->getFilters();
+			if($this->subject() instanceof Model) {
+				return $this->tableAlias().'.'.$this->foreignKeyField().' = '.$this->subject()->primaryKey();
+			} elseif($this->subject() instanceof Relation) {
+				return $this->subject()->getFilters();
 			} else {
 				return null;
 			}

@@ -7,41 +7,44 @@
 		/**
 		 * @var Model|Factory The subject of this relationship
 		 */
-		protected $_Subject;
+		private $Subject;
 		
 		/**
 		 * @var string The name of the foreign key used in this relationship.
 		 *             Should be set in the constructor of the extending class.
 		 */
-		protected $_foreignKeyField;
+		private $foreignKeyField;
 		
 		/**
 		 * @var string The aliased relationship name (used for detecing
 		 *             foreign key names)
 		 */
-		protected $_alias;
+		private $alias;
 		
 		public function __construct($config, $subject) {
 			parent::__construct($config);
-			$this->_Subject = $subject;
-			$this->_alias = isset($config['alias'])
+			$this->Subject = $subject;
+			$this->alias = isset($config['alias'])
 				? $config['alias']
 				: $config['model'];
-			$this->_tableAlias = isset($config['tableAlias'])
+			$this->tableAlias(isset($config['tableAlias'])
 				? $config['tableAlias']
-				: $this->_alias;
+				: $this->alias);
 		}
 		
 		public function __get($name) {
 			if($name == 'Subject') {
-				return $this->_Subject;
+				return $this->Subject;
 			} else {
 				return parent::__get($name);
 			}
 		}
 		
-		public function alias() {
-			return $this->_alias;
+		public function alias($set = false) {
+			if($set !== false) {
+				$this->alias = $set;
+			}
+			return $this->alias;
 		}
 		
 		/**
@@ -56,7 +59,7 @@
 		public function find($where = null, $target = null) {
 			$object = $target === null
 				? $this
-				: $this->_backReference($this, $target);
+				: $this->backReference($this, $target);
 			
 			$query = new ModelQuery(ModelQuery::SELECT, $object->className());
 			$query->fields('`'.$object->tableAlias().'`.*')
@@ -80,7 +83,7 @@
 		public function delete($where = null, $target = null) {
 			$object = $target === null
 				? $this
-				: $this->_backReference($this, $target);
+				: $this->backReference($this, $target);
 				
 			$query = new ModelQuery(ModelQuery::DELETE, $object->className());
 			$query->table($object->tableName());
@@ -97,11 +100,18 @@
 			return $query;
 		}
 		
-		public function foreignKeyField() {
-			return $this->_foreignKeyField;
+		public function subject() {
+			return $this->Subject;
 		}
 		
-		protected function _backReference($object, $target) {
+		public function foreignKeyField($set = false) {
+			if($set !== false) {
+				$this->foreignKeyField = $set;
+			}
+			return $this->foreignKeyField;
+		}
+		
+		protected function backReference($object, $target) {
 			while($object instanceof Relation) {
 				if($object->tableAlias() == $target) {
 					return $object;

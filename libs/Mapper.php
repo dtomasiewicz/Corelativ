@@ -6,22 +6,22 @@
 	 * The main Corelativ ORM wrapper.
 	 */
 	abstract class Mapper {
-		protected static $_config;
-		protected static $_factories = array();
+		private static $config;
+		private static $factories = array();
 		
 		public static function init($config = array()) {
-			self::$_config = $config;
+			self::$config = $config;
 		}
 		
 		public static function factory($modelName) {
-			if (!isset(self::$_factories[$modelName])) {
-				if (class_exists('Corelativ\\Model\\'.$modelName)) {
-					self::$_factories[$modelName] = new Factory(array('model' => $modelName));
+			if (!isset(self::$factories[$modelName])) {
+				if (class_exists('Corelativ\Model\\'.$modelName)) {
+					self::$factories[$modelName] = new Factory(array('model' => $modelName));
 				} else {
-					self::$_factories[$modelName] = false;
+					self::$factories[$modelName] = false;
 				}
 			}
 			
-			return self::$_factories[$modelName];
+			return self::$factories[$modelName];
 		}
 	}

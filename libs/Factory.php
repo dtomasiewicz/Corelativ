@@ -59,6 +59,15 @@
 			}
 		}
 		
+		public function create($properties = null) {
+			$class = $this->className;
+			$new = new $class();
+			if($properties !== null) {
+				$new->set($properties);
+			}
+			return $new;
+		}
+		
 		public function relate($alias, $as = null) {
 			if ($as === null && isset($this->relations[$alias])) {
 				return $this->relations[$alias];

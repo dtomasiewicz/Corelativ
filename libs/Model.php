@@ -195,8 +195,6 @@
 							unset($this->offsets[$property]);
 						}
 					}
-				} else {
-					throw new Exception\Model('Trying to set invalid model property: '.$property);
 				}
 			}
 		}
@@ -267,7 +265,11 @@
 		/**
 		 * Saves models.
 		 */
-		public function save() {
+		public function save($validate = true) {
+			if($validate && !$this->validate()) {
+				return false;
+			}
+			
 			$set = array();
 			$params = array();
 			foreach($this->changes as $prop => $val) {
@@ -359,23 +361,28 @@
 		}
 		
 		public function addError($field, $error) {
-			if ($old = $this->errors[$field]) {
-				$old[] = $error;
-				$this->errors[$field] = $old;
+			if (isset($this->errors[$field])) {
+				$this->errors[$field][] = $error;
 			} else {
 				$this->errors[$field] = array($error);
 			}
 		}
 		
 		public function valid($fields = null) {
+			if($fields === null) {
+				return count($this->errors) === 0;
+			}
+			
 			if (!is_array($fields)) {
 				$fields = array($fields);
 			}
+			
 			foreach ($fields as $field) {
 				if (isset($this->errors[$field]) && count($this->errors[$field]) > 0) {
 					return false;
 				}
 			}
+			
 			return true;
 		}
 		
